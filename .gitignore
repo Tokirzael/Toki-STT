@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+debug.log*
+settings.json
+.launch_lock
+*.corrupt
+e2e_probe*.py
+cfg_probe.py
+qa_*.txt

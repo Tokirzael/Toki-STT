@@ -1,0 +1,18 @@
+{
+    "audio": {
+        "mic_id": null
+    },
+    "models": {
+        "selected_model": "Whisper",
+        "whisper_model_size": "large-v3-turbo"
+    },
+    "osc": {
+        "ip": "127.0.0.1",
+        "port": 9000
+    },
+    "hotkeys": {
+        "ptt_key": "v",
+        "vr_ptt_button": 17,
+        "vr_ptt_device": 0
+    }
+}

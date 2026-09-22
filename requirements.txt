@@ -1,0 +1,14 @@
+PySide6
+openai-whisper
+faster-whisper
+python-osc
+pynput
+# OpenVR bindings (github.com/cmbruns/pyopenvr), published on PyPI as "openvr"
+openvr>=2.12
+sounddevice
+numpy
+# We will install torch manually in run_app.bat to ensure CUDA version,
+# but listing it here as a fallback or for dependency metadata is fine.
+torch
+torchaudio
+--extra-index-url https://download.pytorch.org/whl/cu124
