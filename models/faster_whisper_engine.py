@@ -1,8 +1,8 @@
-import threading
-import numpy as np
 import gc
+
+import numpy as np
 from core.logger import logger
-from .base import STTModel
+from .base import STTModel, AudioBuffer
 
 # Import faster_whisper lazily or handle import errors if not installed?
 # Requirement said we installed it.
@@ -22,10 +22,6 @@ try:
     import torch
 except ImportError:
     torch = None
-
-# Cap buffered audio so a stuck/forgotten PTT can't grow memory without bound
-MAX_BUFFER_SECONDS = 120
-MAX_BUFFER_SAMPLES = 16000 * MAX_BUFFER_SECONDS
 
 
 class FasterWhisperEngine(STTModel):
@@ -48,11 +44,9 @@ class FasterWhisperEngine(STTModel):
 
         self.model = None
         self.status = "Unloaded"
-        self.lock = threading.Lock()
 
-        # Buffering for PTT logic (similar to standard Whisper)
-        self.audio_buffer = []
-        self._buffer_samples = 0
+        # Buffering for PTT logic (shared implementation with WhisperEngine)
+        self.audio_buffer = AudioBuffer()
 
     def load(self):
         if WhisperModel is None:
@@ -117,12 +111,10 @@ class FasterWhisperEngine(STTModel):
         return self.model
 
     def unload(self):
-        with self.lock:
-            if self.model:
-                del self.model
-                self.model = None
-            self.audio_buffer = []
-            self._buffer_samples = 0
+        if self.model:
+            del self.model
+            self.model = None
+        self.audio_buffer.clear()
 
         if torch and torch.cuda.is_available():
             try:
@@ -142,40 +134,28 @@ class FasterWhisperEngine(STTModel):
         if self.model is None:
             return None
 
-        # Accumulate
-        if audio_data is not None:
-            with self.lock:
-                self.audio_buffer.append(audio_data)
-                self._buffer_samples += int(audio_data.shape[0])
-                # Drop the oldest chunks once the buffer exceeds the cap
-                while self._buffer_samples > MAX_BUFFER_SAMPLES and len(self.audio_buffer) > 1:
-                    self._buffer_samples -= int(self.audio_buffer[0].shape[0])
-                    self.audio_buffer.pop(0)
+        # Accumulate (AudioBuffer handles the mono/float32 cap bookkeeping)
+        self.audio_buffer.append(audio_data)
 
         return None
 
     def clear_buffer(self):
-        with self.lock:
-            self.audio_buffer = []
-            self._buffer_samples = 0
-            logger.debug("FasterWhisper buffer cleared.")
+        self.audio_buffer.clear()
+        logger.debug("FasterWhisper buffer cleared.")
 
     def finalize_transcription(self):
         """Called when PTT is released."""
         if not self.model:
             return None
 
-        with self.lock:
-            if not self.audio_buffer:
-                return None
-            buffer = self.audio_buffer
-            self.audio_buffer = []
-            self._buffer_samples = 0
+        chunks = self.audio_buffer.finalize()
+        if not chunks:
+            return None
 
         logger.info("Finalizing Faster Whisper Transcription...")
 
-        # Concatenate buffer
-        full_audio = np.concatenate(buffer)
+        # Concatenate buffer (chunks were mono float32 at append time)
+        full_audio = np.concatenate(chunks)
 
         # Ensure flat array (mono)
         if len(full_audio.shape) > 1:

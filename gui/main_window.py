@@ -321,8 +321,9 @@ class MainWindow(QMainWindow):
         self.txt_ptt_key.setText(format_ptt_display(ptt_key) if ptt_key else "")
         self.input_manager.set_ptt_key(ptt_key)
 
-        # Set VR PTT
-        vr_ptt_btn = config['hotkeys'].get('vr_ptt_button', 7)
+        # Set VR PTT (defaults mirror ConfigManager.DEFAULT_CONFIG - the merge
+        # guarantees these keys exist; .get() is only a belt-and-braces fallback)
+        vr_ptt_btn = config['hotkeys'].get('vr_ptt_button', 17)
         vr_ptt_dev = config['hotkeys'].get('vr_ptt_device', 0)
         self.lbl_vr_ptt.setText(f"VR PTT: {button_name(vr_ptt_btn)}")
         self.vr_input_manager.vr_ptt_button = vr_ptt_btn
@@ -659,11 +660,22 @@ class MainWindow(QMainWindow):
         self.btn_load_model.setEnabled(True)
 
     def process_audio_queue(self):
+        # While nothing will buffer (no model loaded or PTT not held) keep only
+        # the LATEST chunk from the queue: the input-level meter stays live,
+        # queue RAM stays bounded on a stalled GUI thread, and stale audio can't
+        # seed the next PTT session. With PTT active every chunk is kept.
+        chunks = []
+        buffering = bool(self.current_model and self.is_ptt_active)
         while True:
             chunk = self.audio_manager.get_audio_chunk()
             if chunk is None:
                 break
+            if not buffering:
+                chunks = [chunk]
+            else:
+                chunks.append(chunk)
 
+        for chunk in chunks:
             # Calculate volume
             rms = np.sqrt(np.mean(chunk**2))
             val = int(rms * 500)
@@ -677,7 +689,7 @@ class MainWindow(QMainWindow):
                 logger.debug(f"Audio Signal RMS: {rms:.6f} (Queue Processed)")
 
             # Buffer audio while PTT is held (Whisper / FasterWhisper)
-            if self.current_model and self.is_ptt_active:
+            if buffering:
                 self.current_model.process_audio(chunk)
 
     def _check_chat_clear(self):
@@ -750,7 +762,15 @@ class MainWindow(QMainWindow):
         self.input_manager.stop()
         self.vr_input_manager.stop()
         self.osc_controller.stop()
-        if self.current_model:
-            self.current_model.unload()
+        # Take ownership of the model under the same lock _unload_model_thread
+        # uses, so a teardown that finished mid-closeEvent is never unloaded twice:
+        # whoever nulls it first owns the (blocking) unload.
+        with self._ptt_lock:
+            leftover = self.current_model
             self.current_model = None
-        event.accept()
+        if leftover:
+            try:
+                leftover.unload()
+            except Exception as e:
+                logger.error(f"Error unloading model on close: {e}")
+        event.accept()

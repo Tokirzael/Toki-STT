@@ -8,7 +8,7 @@ Desktop/VR speech-to-text utility: hold a PTT key (keyboard or SteamVR controlle
 run_app.bat
 ```
 
-That's it. First run installs Python 3.10+, a local `.venv`, CUDA 12.4 PyTorch (falls back to CPU build automatically), and everything in `requirements.txt`. Subsequent runs detect the healthy environment and skip straight to launch — works offline once set up.
+That's it. First run finds a suitable Python (3.9–3.13, auto-installing a pinned 3.12 if none exists), creates a local `.venv`, installs PyTorch from the CUDA wheel index that matches BOTH your Python minor and GPU architecture (cu124/cu126 normally; cu128 for RTX 50-series Blackwell cards, which have no kernels in older builds — detected via `nvidia-smi` before anything is installed), then everything in `requirements.txt`. On a box without an NVIDIA GPU it installs the same CUDA builds and verifies with a device probe at startup. Subsequent runs detect the healthy environment and skip straight to launch — works offline once set up (a wheel/driver mismatch on an existing `.venv` self-repairs in place).
 
 In the window: pick an engine, click **Load Model**, press PTT.
 
@@ -23,7 +23,7 @@ Both transcribe the **accumulated PTT buffer** on key release. Check **"Use Syst
 
 ## Controls
 
-- **Keyboard PTT**: default `Ctrl+R`. Rebind with **Record PTT** (Esc cancels; some keys are blocked so you can't lock yourself out of the UI).
+- **Keyboard PTT**: default `V` (yours is whatever you last recorded — it persists in `settings.json`). Rebind with **Record PTT** (Esc cancels; some keys are blocked so you can't lock yourself out of the UI).
 - **VR PTT**: bind any SteamVR controller button with **Record VR PTT**. Requires SteamVR running at launch or re-pressing Record. Optional per-controller filtering is applied automatically from the recorded device.
 - Both inputs share one logical PTT: pressing keyboard + VR simultaneously is debounced to a single utterance, and overlapping transcriptions queue in order instead of dropping text.
 
@@ -54,12 +54,12 @@ main.py                     Entry: QApplication + single-instance guard
 core/                       audio capture (sounddevice), input (pynput/OpenVR),
                             OSC client, config, logging
 gui/main_window.py          The whole UI (PySide6)
-models/base.py              STTModel interface
+models/base.py              STTModel interface + shared AudioBuffer (PTT accumulation)
 models/whisper_engine.py    openai-whisper engine
 models/faster_whisper_engine.py  faster-whisper CT2 engine
-scripts/                    Legacy exploration scripts for the old Kroko engine —
-                            not part of the app, safe to delete
 run_app.bat                 Self-healing installer + launcher (the only entry point you need)
+stt_probe.py / stt_pip.py   Launcher helpers (interpreter/GPU probes; pip wrapper that
+                            works around untrusted-mount PATH issues on this box)
 stt_launch_task.{bat,ps1}   Headless relaunch helper
 ```
 
@@ -67,4 +67,3 @@ stt_launch_task.{bat,ps1}   Headless relaunch helper
 
 - Windows with a microphone; NVIDIA GPU optional but strongly recommended
 - SteamVR only needed for VR PTT — the app runs fine without it
-- Python 3.10+ on PATH (installed by `run_app.bat`'s full-setup path if missing)
