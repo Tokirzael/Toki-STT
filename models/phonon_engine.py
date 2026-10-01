@@ -74,6 +74,29 @@ class PhononEngine(STTModel):
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         return os.path.join(root, "phonon_server.log")
 
+    def _kill_port_squatter(self):
+        """If a dead-end process holds self.port (a crashed prior server that
+        died but left its listener, or a bind-loser), free the port so a fresh
+        spawn can bind. Best-effort; runs only immediately before spawning."""
+        try:
+            import psutil
+        except ImportError:
+            return  # psutil not installed - skip; health gate still works
+        try:
+            for conn in psutil.net_connections(kind="tcp"):
+                if conn.laddr and conn.laddr.port == self.port and \
+                        conn.status == psutil.CONN_LISTEN and conn.pid:
+                    try:
+                        proc = psutil.Process(conn.pid)
+                        logger.warning(f"Killing stale process holding port {self.port}: "
+                                       f"{proc.pid} ({' '.join(proc.cmdline()[:4])})")
+                        proc.kill()
+                        proc.wait(timeout=5)
+                    except Exception as e:
+                        logger.warning(f"Could not kill port {self.port} holder: {e}")
+        except Exception:
+            pass  # psutil absent / no permission - the health gate still works
+
     def _ensure_server(self):
         """Idempotent: returns True when /health answers, spawning a detached
         `fermion serve` when it doesn't. Raises RuntimeError on failure."""
@@ -81,6 +104,7 @@ class PhononEngine(STTModel):
             if self._health():
                 return True
 
+            self._kill_port_squatter()
             import sys
             venv_py = sys.executable
             log_path = self._find_server_log()
@@ -91,11 +115,13 @@ class PhononEngine(STTModel):
             try:
                 kwargs = {}
                 if os.name == "nt":
-                    DETACHED_PROCESS = 0x00000008
-                    CREATE_NEW_PROCESS_GROUP = 0x00000200
+                    # CREATE_NO_WINDOW is essential under pythonw.exe: a
+                    # console child of a console-less parent would otherwise
+                    # auto-allocate a visible console (a blank cmd window).
                     CREATE_NO_WINDOW = 0x08000000
+                    CREATE_NEW_PROCESS_GROUP = 0x00000200
                     kwargs = dict(
-                        creationflags=CREATE_NO_WINDOW | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+                        creationflags=CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP,
                         close_fds=True,
                         stdin=subprocess.DEVNULL,
                         stdout=log_file,
