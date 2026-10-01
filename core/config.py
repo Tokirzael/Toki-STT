@@ -11,8 +11,7 @@ class ConfigManager:
             "mic_id": None
         },
         "models": {
-            "selected_model": "Whisper",  # Whisper or FasterWhisper
-            "whisper_model_size": "large-v3-turbo"
+            "selected_model": "Phonon",  # Phonon or FasterWhisper
         },
         "osc": {
             "ip": "127.0.0.1",

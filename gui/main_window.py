@@ -7,7 +7,7 @@ from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                                QLabel, QComboBox, QGroupBox, QLineEdit,
                                QRadioButton, QProgressBar, QTextEdit, QStatusBar,
-                               QPushButton, QButtonGroup, QCheckBox)
+                               QPushButton, QButtonGroup)
 from PySide6.QtCore import Signal, QObject, Slot, QTimer
 
 from core.logger import logger
@@ -15,8 +15,8 @@ from core.config import config_manager
 from core.audio import AudioManager
 from core.input import InputManager, VRInputManager, button_name
 from core.osc_client import OSCController, CHATBOX_INPUT, CHATBOX_TYPING
-from models.whisper_engine import WhisperEngine
 from models.faster_whisper_engine import FasterWhisperEngine
+from models.phonon_engine import PhononEngine
 
 from .styles import DARK_THEME
 
@@ -173,23 +173,20 @@ class MainWindow(QMainWindow):
         model_layout = QVBoxLayout()
 
         self.model_group_btn = QButtonGroup(self)
-        # Both engines load large-v3-turbo (~809M params). Measured on this box
-        # (RTX 4090): openai-whisper fp16 costs ~3.2 GB of torch allocator + CUDA
-        # context/runtime overhead; the CT2 int8 build costs ~2 GB total and is
-        # allocated outside torch's tracker, so it shows up in nvidia-smi but not
-        # in torch.cuda.memory_allocated().
-        self.rb_whisper = QRadioButton("Whisper Turbo (PTT)  —  large-v3-turbo, ~4 GB VRAM (fp16)")
-        self.rb_faster = QRadioButton("Faster Whisper (PTT)  —  turbo CT2 int8, ~2 GB VRAM")
-        self.model_group_btn.addButton(self.rb_whisper)
+        # Faster Whisper: GPU-only (CT2 float16 on CUDA) - the VRAM figure is
+        # measured on this box (RTX 4090); the CT2 build allocates outside
+        # torch's tracker, so it shows up in nvidia-smi but not in
+        # torch.cuda.memory_allocated().
+        # Phonon-2: runs on CPU/RAM by design (FermionResearch/Phonon-2,
+        # ~164 MB download, English only) - a local 'fermion serve' process
+        # answers each PTT release over loopback HTTP.
+        self.rb_faster = QRadioButton("Faster Whisper (PTT)  —  turbo CT2 float16, ~2 GB VRAM (GPU only)")
+        self.rb_phonon = QRadioButton("Phonon-2 (PTT)  —  CPU/RAM, English only (~164 MB model, local server)")
         self.model_group_btn.addButton(self.rb_faster)
+        self.model_group_btn.addButton(self.rb_phonon)
 
-        model_layout.addWidget(self.rb_whisper)
         model_layout.addWidget(self.rb_faster)
-
-        # Optional CPU load: keeps all VRAM free at the cost of speed.
-        self.chk_cpu_load = QCheckBox("Use System RAM/CPU (saves VRAM, slower)")
-        self.chk_cpu_load.toggled.connect(self._on_cpu_toggle)
-        model_layout.addWidget(self.chk_cpu_load)
+        model_layout.addWidget(self.rb_phonon)
 
         # Load/Unload Button
         self.btn_load_model = QPushButton("Load Model")
@@ -290,17 +287,13 @@ class MainWindow(QMainWindow):
     def load_settings(self):
         config = config_manager.config
 
-        # Set Model
-        self.rb_whisper.blockSignals(True)
-        self.rb_faster.blockSignals(True)
-        try:
-            if config['models']['selected_model'] == "FasterWhisper":
-                self.rb_faster.setChecked(True)
-            else:
-                self.rb_whisper.setChecked(True)
-        finally:
-            self.rb_whisper.blockSignals(False)
-            self.rb_faster.blockSignals(False)
+        # Set Model (legacy "Whisper" / "WhisperTurbo" selections migrate to
+        # FasterWhisper, the GPU engine that replaced the old openai-whisper)
+        selected = config['models']['selected_model']
+        if selected == "Phonon":
+            self.rb_phonon.setChecked(True)
+        else:  # FasterWhisper, and anything legacy -> the GPU engine
+            self.rb_faster.setChecked(True)
 
         # Set Mic (block signals so the stream is started only once, below,
         # on the finally selected device)
@@ -344,36 +337,30 @@ class MainWindow(QMainWindow):
         if self.current_model:
             self.unload_model()
         else:
-            model_type = "FasterWhisper" if self.rb_faster.isChecked() else "Whisper"
+            model_type = "Phonon" if self.rb_phonon.isChecked() else "FasterWhisper"
             self.load_model(model_type)
 
     def load_model(self, model_type):
         self.update_status(f"Loading {model_type}...")
         self.btn_load_model.setEnabled(False)
-        self.rb_whisper.setEnabled(False)
         self.rb_faster.setEnabled(False)
-        self.chk_cpu_load.setEnabled(False)
+        self.rb_phonon.setEnabled(False)
 
         # Lock input settings
         self.txt_ptt_key.setEnabled(False)
         self.btn_record_key.setEnabled(False)
         self.btn_rec_vr_ptt.setEnabled(False)
 
-        device = "cpu" if self.chk_cpu_load.isChecked() else "auto"
-        threading.Thread(target=self._load_model_thread, args=(model_type, device), daemon=True).start()
+        threading.Thread(target=self._load_model_thread, args=(model_type,), daemon=True).start()
 
-    def _load_model_thread(self, model_type, device="auto"):
+    def _load_model_thread(self, model_type):
         engine = None
         try:
-            # Respect the configured model size (falls back to the shipped default)
-            model_size = ((config_manager.config.get("models") or {}).get("whisper_model_size")) or "large-v3-turbo"
-            if model_type == "Whisper":
-                engine = WhisperEngine(model_size, device="cpu" if device == "cpu" else "cuda")
+            if model_type == "Phonon":
+                engine = PhononEngine()
             else:
-                # The default size keeps the tuned CT2 model; any other value is
-                # passed through to faster-whisper (size name or HF repo ID).
-                fw_model_id = None if model_size == "large-v3-turbo" else model_size
-                engine = FasterWhisperEngine(model_id=fw_model_id, device=device)
+                # GPU-only: float16 CT2 on CUDA, default large-v3-turbo repo
+                engine = FasterWhisperEngine(device="cuda")
 
             engine.load()
 
@@ -449,20 +436,12 @@ class MainWindow(QMainWindow):
 
     def _reset_input_controls(self):
         """Re-enable the controls that are locked while a model is loaded/loading."""
-        self.rb_whisper.setEnabled(True)
         self.rb_faster.setEnabled(True)
-        self.chk_cpu_load.setEnabled(True)
+        self.rb_phonon.setEnabled(True)
         self.txt_ptt_key.setEnabled(True)
         self.btn_record_key.setEnabled(True)
         self.btn_rec_vr_ptt.setEnabled(True)
         self.btn_load_model.setEnabled(True)
-
-    def _on_cpu_toggle(self, checked):
-        """Live hint in the status bar about what a CPU load implies."""
-        if checked:
-            self.update_status("CPU mode: model loads in system RAM (~1.5 GB), VRAM stays free, transcription is slower.")
-        elif not self.current_model:
-            self.update_status("GPU mode (default): faster transcription, ~2-4 GB VRAM while loaded.")
 
     def _device_label(self, engine):
         """Where the model actually lives ('cpu'/'cuda') after load."""
@@ -773,4 +752,4 @@ class MainWindow(QMainWindow):
                 leftover.unload()
             except Exception as e:
                 logger.error(f"Error unloading model on close: {e}")
-        event.accept()
+        event.accept()

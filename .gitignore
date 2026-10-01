@@ -8,3 +8,6 @@ settings.json
 e2e_probe*.py
 cfg_probe.py
 qa_*.txt
+
+# local server log (app writes it when it spawns the Phonon server)
+phonon_server.log

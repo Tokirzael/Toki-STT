@@ -14,12 +14,12 @@ In the window: pick an engine, click **Load Model**, press PTT.
 
 ## STT Engines
 
-| Radio button | Engine | VRAM (loaded) | Notes |
+| Radio button | Engine | Footprint | Notes |
 |---|---|---|---|
-| Whisper Turbo (PTT) | `openai-whisper` large-v3-turbo, fp16 on CUDA | ~4 GB | Falls back to CPU automatically if no CUDA |
-| Faster Whisper (PTT) | faster-whisper CT2 int8 turbo (`deepdml/faster-whisper-large-v3-turbo-ct2`) | ~2 GB | Local-cache-first; downloads from HF only on first run |
+| Faster Whisper (PTT) | faster-whisper CT2 float16 turbo (`deepdml/faster-whisper-large-v3-turbo-ct2`) on CUDA | ~2 GB VRAM | GPU only. Local-cache-first; downloads from HF only on first run |
+| Phonon-2 (PTT) | FermionResearch/Phonon-2 (~164 MB) via a local `fermion serve` loopback server | CPU / RAM, English only | No GPU needed. The first "Load Model" starts a detached local server if one isn't running; `run_app.bat` prefetches the model on first setup |
 
-Both transcribe the **accumulated PTT buffer** on key release. Check **"Use System RAM/CPU"** to keep all VRAM free at the cost of speed (Whisper runs on CPU, Faster Whisper loads int8 in system RAM). Models load/unload manually — nothing is loaded until you ask.
+Both transcribe the **accumulated PTT buffer** on key release. Models load/unload manually — nothing is loaded until you ask. Unloading Phonon-2 keeps the local server running (it's fast to reuse and outlives the app on purpose).
 
 ## Controls
 
@@ -55,11 +55,12 @@ core/                       audio capture (sounddevice), input (pynput/OpenVR),
                             OSC client, config, logging
 gui/main_window.py          The whole UI (PySide6)
 models/base.py              STTModel interface + shared AudioBuffer (PTT accumulation)
-models/whisper_engine.py    openai-whisper engine
-models/faster_whisper_engine.py  faster-whisper CT2 engine
+models/faster_whisper_engine.py  faster-whisper CT2 engine (GPU only)
+models/phonon_engine.py     Phonon-2 engine: drives a local `fermion serve` loopback server
 run_app.bat                 Self-healing installer + launcher (the only entry point you need)
 stt_probe.py / stt_pip.py   Launcher helpers (interpreter/GPU probes; pip wrapper that
                             works around untrusted-mount PATH issues on this box)
+phonon_check.py             Launcher helper: verifies/prefetches the Phonon-2 model (file token)
 stt_launch_task.{bat,ps1}   Headless relaunch helper
 ```
 

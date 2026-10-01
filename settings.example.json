@@ -3,8 +3,7 @@
         "mic_id": null
     },
     "models": {
-        "selected_model": "Whisper",
-        "whisper_model_size": "large-v3-turbo"
+        "selected_model": "Phonon"
     },
     "osc": {
         "ip": "127.0.0.1",

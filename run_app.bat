@@ -8,6 +8,7 @@ echo [INFO] Toki-STT launcher...
 :: copy is harmless: every call site falls back gracefully to no GPU info.
 copy /y "%~dp0stt_probe.py" "%TEMP%\stt_probe.py" >nul 2>&1
 copy /y "%~dp0stt_pip.py" "%TEMP%\stt_pip.py" >nul 2>&1
+copy /y "%~dp0phonon_check.py" "%TEMP%\phonon_check.py" >nul 2>&1
 
 :: ===========================================================================
 :: STEP 1 - Pick an interpreter (PYTHON_USED = how to invoke it: a "py -3.NN"
@@ -141,7 +142,7 @@ if not exist ".venv\.venv_marker" echo [INFO] Pre-existing .venv without build m
 :: skip this gate (their setup may be CPU-only). Written flat on purpose: the
 :: errorlevel test must sit directly after its command, and labels/comments do
 :: not survive inside (...) blocks.
-.venv\Scripts\python.exe -c "import PySide6, whisper, faster_whisper, pynput, sounddevice, pythonosc, numpy, torch" >nul 2>&1
+.venv\Scripts\python.exe -c "import PySide6, faster_whisper, fermion, pynput, sounddevice, pythonosc, numpy, torch" >nul 2>&1
 if errorlevel 1 goto :venv_needs_repair
 
 :: No nvidia-smi / no NVIDIA GPU: gpumajfile writes "0" (never fails silently),
@@ -294,11 +295,39 @@ if not "!CU_DEV!"=="ok" (
 )
 echo [INFO] CUDA device online: !CU_DEV!
 
-python -c "import PySide6, whisper, faster_whisper, pynput, sounddevice, pythonosc, numpy, torch" >nul 2>&1
+python -c "import PySide6, faster_whisper, fermion, pynput, sounddevice, pythonosc, numpy, torch" >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] Required Python dependencies are missing or broken.
     pause
     exit /b 1
+)
+
+:: ===========================================================================
+:: STEP 4 - Phonon-2 (CPU engine) model setup.
+:: The app drives a local `fermion serve` loopback server (spawned by the app
+:: itself on first "Load Model"); this step only makes sure the one-time
+:: ~164 MB model (FermionResearch/Phonon-2) is on the machine AND that a real
+:: transcription works. phonon_check.py is the file-token helper copied to
+:: %TEMP% at startup (same contract as stt_probe.py: ALWAYS exits 0, writes
+:: one token). Missing model -> downloaded from huggingface.co now, so the
+:: user's first PTT is not stuck on a 164 MB transfer mid-utterance.
+:: Soft-fail: Faster Whisper keeps working even if this step fails; the error
+:: is logged for the user, and the next launch retries.
+:: ===========================================================================
+set "PHONON_TOKEN="
+python "%TEMP%\phonon_check.py" check %TEMP%\stt_phonon_model.txt >nul 2>nul
+if exist "%TEMP%\stt_phonon_model.txt" set /p PHONON_TOKEN=<"%TEMP%\stt_phonon_model.txt"
+if "%PHONON_TOKEN%"=="ok" goto :run
+
+echo [INFO] Phonon-2 model not verified on this machine - prefetching (one-time ~164 MB download)...
+python "%TEMP%\phonon_check.py" prefetch %TEMP%\stt_phonon_model.txt >nul 2>nul
+set "PHONON_TOKEN="
+if exist "%TEMP%\stt_phonon_model.txt" set /p PHONON_TOKEN=<"%TEMP%\stt_phonon_model.txt"
+if not "%PHONON_TOKEN%"=="ok" (
+    echo [WARN] Phonon-2 model setup did not complete: !PHONON_TOKEN!
+    echo [WARN] The app will still start; pick Faster Whisper, or check your connection and re-run.
+) else (
+    echo [INFO] Phonon-2 model ready on this machine.
 )
 
 :run
