@@ -1,17 +1,10 @@
 PySide6
-
 faster-whisper
-
 # Phonon-2 CPU engine (FermionResearch/Phonon-2): OpenAI-compatible local
-
 # server via `python -m fermion.cli serve`; pulls in transformers + huggingface_hub.
-
 # soundfile + scipy + zstandard are REQUIRED by the fermion CPU speech engine
-
 # at runtime even though fermion-research does not declare them in its PyPI
-
 # metadata (zstandard decompresses the model archive on first fetch).
-
 fermion-research>=0.2.6
 soundfile
 scipy
@@ -19,24 +12,13 @@ zstandard
 # psutil: the app uses it to free port 8900 before spawning the Phonon server
 psutil
 python-osc
-
 pynput
-
 # OpenVR bindings (github.com/cmbruns/pyopenvr), published on PyPI as "openvr"
-
 openvr>=2.12
-
 sounddevice
-
 numpy
-
 # We will install torch manually in run_app.bat to ensure CUDA version,
-
 # but listing it here as a fallback or for dependency metadata is fine.
-
 torch
-
 torchaudio
-
 --extra-index-url https://download.pytorch.org/whl/cu124
-
