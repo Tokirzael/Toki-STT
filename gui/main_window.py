@@ -70,6 +70,12 @@ class WorkerSignals(QObject):
     volume_update = Signal(int)
     error_occurred = Signal(str)
     vr_key_recorded = Signal(int, int)
+    # Keyboard PTT capture completed (fired from the pynput callback thread,
+    # which is NOT the GUI thread - the signal hops over safely).
+    key_capture_finished = Signal()
+    # Model load phase (fired from the load worker thread): e.g. "Checking
+    # local model cache…", "Downloading model (~1.5 GB, first run only…)".
+    load_phase = Signal(str)
 
 
 class MainWindow(QMainWindow):
@@ -87,6 +93,8 @@ class MainWindow(QMainWindow):
         self.signals.volume_update.connect(self.update_volume_meter)
         self.signals.error_occurred.connect(self.handle_error)
         self.signals.vr_key_recorded.connect(self.handle_vr_key_recorded)
+        self.signals.key_capture_finished.connect(self._key_capture_done)
+        self.signals.load_phase.connect(self.update_status)
 
         # Core Components
         self.audio_manager = AudioManager()
@@ -362,7 +370,9 @@ class MainWindow(QMainWindow):
                 # GPU-only: float16 CT2 on CUDA, default large-v3-turbo repo
                 engine = FasterWhisperEngine(device="cuda")
 
-            engine.load()
+            # Report load phases (cache check, first-run download, server
+            # warm-up) to the status bar via the load_phase signal.
+            engine.load(on_phase=lambda msg: self.signals.load_phase.emit(msg))
 
             # Start audio stream after model is loaded
             self.audio_manager.start_stream()
@@ -464,6 +474,7 @@ class MainWindow(QMainWindow):
         from pynput import keyboard as _kb
 
         captured = {}
+        done = False
 
         def on_press(key):
             # pynput quirk: listener.stop() blocks until callbacks finish, so it
@@ -472,10 +483,17 @@ class MainWindow(QMainWindow):
             normalized = key_to_ptt_string(key)
             if str(key) == "key.esc":
                 captured["cancelled"] = True  # Esc cancels the capture window
+                self.signals.key_capture_finished.emit()
                 return False
             if normalized is None:
                 return True  # ignored key (blocked set / modifier-only) - keep listening
             captured["ptt"] = normalized
+            # Confirm immediately: hop to the GUI thread via the signal instead
+            # of waiting for the capture window to expire. (Before this, the
+            # ONLY path into _finish() was the 5-second timeout timer, so a
+            # bound key still took the full window to register - the
+            # "significant delay" after Record PTT.)
+            self.signals.key_capture_finished.emit()
             return False
 
         listener = _kb.Listener(on_press=on_press, suppress=False)
@@ -486,6 +504,11 @@ class MainWindow(QMainWindow):
         self.update_status("Press the key to use as PTT (Esc cancels)...")
 
         def _finish():
+            nonlocal done
+            if done:  # capture already handled it - the safety timer no-ops
+                return
+            done = True
+            listener.stop()
             if "ptt" not in captured:
                 self.btn_record_key.setEnabled(True)
                 self.update_status("PTT recording timed out - no key detected.")
@@ -498,11 +521,18 @@ class MainWindow(QMainWindow):
             self.btn_record_key.setEnabled(True)
             self.update_status(f"PTT bound: {format_ptt_display(ptt)}")
 
-        def _run():
-            listener.stop()
-            QTimer.singleShot(0, _finish)  # hop back to the GUI thread
+        # Safety net: no key within the window -> confirm the (empty) capture.
+        # When a key WAS captured, _finish() has already run and this is a
+        # no-op - same shape as the VR record timeout.
+        self._key_capture_finish = _finish
+        QTimer.singleShot(KEY_RECORD_TIMEOUT_MS, _finish)
 
-        QTimer.singleShot(KEY_RECORD_TIMEOUT_MS, _run)
+    @Slot()
+    def _key_capture_done(self):
+        # Called from the pynput callback thread; hop to the GUI thread.
+        finish = getattr(self, "_key_capture_finish", None)
+        if finish is not None:
+            QTimer.singleShot(0, finish)
 
     def record_vr_key(self, mode):
         # (Re)initialize on demand so SteamVR starting after app launch works

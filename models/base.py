@@ -49,8 +49,14 @@ class AudioBuffer:
 
 class STTModel(ABC):
     @abstractmethod
-    def load(self):
-        """Loads the model into memory."""
+    def load(self, on_phase=None):
+        """Loads the model into memory.
+
+        `on_phase` (optional) is a callback invoked from the loading thread
+        with a short, user-facing phase string ("Downloading model…",
+        "Loading on CUDA…"). Engines MUST NOT do any blocking work before
+        calling it with their first phase, and the GUI displays it verbatim,
+        so keep messages short and actionable."""
         pass
 
     @abstractmethod

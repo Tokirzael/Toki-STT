@@ -48,7 +48,14 @@ class FasterWhisperEngine(STTModel):
         # Buffering for PTT logic (shared implementation with WhisperEngine)
         self.audio_buffer = AudioBuffer()
 
-    def load(self):
+    def load(self, on_phase=None):
+        def phase(msg):
+            if on_phase:
+                try:
+                    on_phase(msg)
+                except Exception:
+                    pass
+
         if WhisperModel is None:
             self.status = "Error: Missing Lib"
             logger.error("faster-whisper library not found.")
@@ -61,15 +68,27 @@ class FasterWhisperEngine(STTModel):
 
             if self.device == "cpu":
                 # Explicit CPU request: int8 in system RAM, no GPU touch.
+                phase("Model cached — loading on CPU…")
                 logger.info("Loading on CPU...")
                 self.model = self._create_model("cpu", "int8")
                 logger.info("Faster Whisper loaded on CPU.")
             elif self.device == "cuda":
+                phase("Checking local model cache…")
+                if self._model_cached():
+                    phase("Model cached — loading on CUDA…")
+                else:
+                    phase("Downloading model (~1.5 GB, first run only — please wait, do not close)…")
                 logger.info("Attempting to load on CUDA...")
                 self.model = self._create_model("cuda", "float16")
                 logger.info("Faster Whisper loaded on CUDA.")
             else:  # auto: try CUDA first, fall back to CPU
+                phase("Checking local model cache…")
+                cached = self._model_cached()
                 try:
+                    if cached:
+                        phase("Model cached — loading on CUDA…")
+                    else:
+                        phase("Downloading model (~1.5 GB, first run only — please wait, do not close)…")
                     logger.info("Attempting to load on CUDA...")
                     self.model = self._create_model("cuda", "float16")
                     logger.info("Faster Whisper loaded on CUDA.")
@@ -78,6 +97,8 @@ class FasterWhisperEngine(STTModel):
                     # if that fails too, surface the original error as the cause.
                     logger.warning(f"Failed to load on CUDA ({cuda_error}). Falling back to CPU.")
                     try:
+                        phase("Model cached — loading on CPU…")
+                        logger.info("Loading on CPU...")
                         self.model = self._create_model("cpu", "int8")
                         logger.info("Faster Whisper loaded on CPU.")
                     except Exception as cpu_error:
@@ -90,6 +111,32 @@ class FasterWhisperEngine(STTModel):
             self.status = "Error"
             logger.error(f"Failed to load Faster Whisper Engine: {e}")
             raise e
+
+    def _model_cached(self):
+        """True when the model files are already in the local HuggingFace cache.
+
+        Prefers huggingface_hub.try_to_load_from_cache (a pure disk-metadata
+        check: no network, no model load) so the GUI can say "downloading"
+        before the big transfer starts. Falls back to WhisperModel's own
+        local_files_only probe if huggingface_hub is unavailable, so this
+        never hard-depends on it."""
+        try:
+            from huggingface_hub import try_to_load_from_cache
+            return try_to_load_from_cache(self.model_id, "model.bin") is not None
+        except ImportError:
+            pass
+        except Exception:
+            # huggingface_hub present but errored -> assume cached so we don't
+            # mislabel a load as a download; _create_model still handles it.
+            return True
+        try:
+            WhisperModel(self.model_id, device="cpu", compute_type="int8",
+                         local_files_only=True)
+            return True
+        except LocalEntryNotFoundError:
+            return False
+        except Exception:
+            return True
 
     def _create_model(self, device, compute_type):
         """Create the WhisperModel from the local cache first (no network).

@@ -74,6 +74,28 @@ class PhononEngine(STTModel):
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         return os.path.join(root, "phonon_server.log")
 
+    def _model_cached(self):
+        """True when the Phonon-2 model is already in the local fermion cache.
+
+        The model lands in ~/.cache/fermion/speech/FermionResearch__Phonon-2/
+        as a directory containing config.json + model files (honors
+        FERMION_CACHE_DIR). A directory with files in it means a completed
+        download; empty/missing means the server will fetch it on first
+        use. Pure filesystem check - no network, no server involved."""
+        cache_dir = os.environ.get("FERMION_CACHE_DIR", os.path.expanduser("~/.cache/fermion"))
+        model_root = os.path.join(cache_dir, "speech", "FermionResearch__Phonon-2")
+        try:
+            entries = [e for e in os.listdir(model_root) if not e.endswith(".lock")]
+            # A completed model has config.json (and weights) in one of the
+            # versioned subdirectories; the root itself holds no config.json.
+            for e in entries:
+                full = os.path.join(model_root, e)
+                if os.path.isdir(full) and os.path.isfile(os.path.join(full, "config.json")):
+                    return True
+            return os.path.isfile(os.path.join(model_root, "config.json"))
+        except OSError:
+            return False
+
     def _kill_port_squatter(self):
         """If a dead-end process holds self.port (a crashed prior server that
         died but left its listener, or a bind-loser), free the port so a fresh
@@ -97,13 +119,25 @@ class PhononEngine(STTModel):
         except Exception:
             pass  # psutil absent / no permission - the health gate still works
 
-    def _ensure_server(self):
+    def _ensure_server(self, on_phase=None):
         """Idempotent: returns True when /health answers, spawning a detached
-        `fermion serve` when it doesn't. Raises RuntimeError on failure."""
+        `fermion serve` when it doesn't. Raises RuntimeError on failure.
+
+        `on_phase` (optional) reports short, user-facing progress strings;
+        the GUI shows them so a first-run model download is not a mystery."""
+        def phase(msg):
+            if on_phase:
+                try:
+                    on_phase(msg)
+                except Exception:
+                    pass
+
         with self._server_lock:
             if self._health():
                 return True
 
+            phase("Checking local Phonon model...")
+            model_cached = self._model_cached()
             self._kill_port_squatter()
             import sys
             venv_py = sys.executable
@@ -152,6 +186,12 @@ class PhononEngine(STTModel):
                         f"Phonon server process exited early (rc={self._server_proc.returncode}); "
                         f"see {log_path} for details"
                     )
+                # Tell the user what the server is doing while it warms up:
+                # a first use downloads the model, then the server loads it.
+                if not model_cached:
+                    phase("Downloading Phonon-2 model (~164 MB, first run only — please wait, do not close)...")
+                else:
+                    phase("Starting local Phonon-2 server (loading model)...")
                 time.sleep(1)
             raise RuntimeError(
                 f"Phonon server did not become healthy at {self._health_url} within "
@@ -161,11 +201,21 @@ class PhononEngine(STTModel):
     # ------------------------------------------------------------------
     # STTModel interface
     # ------------------------------------------------------------------
-    def load(self):
+    def load(self, on_phase=None):
+        def phase(msg):
+            if on_phase:
+                try:
+                    on_phase(msg)
+                except Exception:
+                    pass
+
         try:
             self.status = "Loading..."
             logger.info("Loading Phonon-2 (CPU, English only) via local serve process...")
-            self._ensure_server()
+            # Phase reporting happens inside _ensure_server (it knows whether
+            # a healthy server already exists and whether the model must be
+            # downloaded on first use).
+            self._ensure_server(on_phase=phase)
             # The server is the 'model'; set it so buffer gating matches
             # the other engines (finalize checks self.model is not None).
             self.model = {"kind": "phonon-2", "base_url": self.base_url}
