@@ -45,10 +45,10 @@ if exist "%INSTALLER%" del /f /q "%INSTALLER%" >nul 2>&1
 where curl.exe >nul 2>&1
 if not errorlevel 1 (
     echo [INFO] Fetching with curl...
-    curl -L --fail -o "%INSTALLER%" https://www.python.org/ftp/python/%PY_PIN_VER%/%ARCH%.exe
+    curl -L --fail -o "%INSTALLER%" https://www.python.org/ftp/python/%PY_PIN_VER%/python-%PY_PIN_VER%-%ARCH%.exe
 ) else (
     echo [INFO] Fetching with PowerShell...
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -UseBasicParsing 'https://www.python.org/ftp/python/%PY_PIN_VER%/%ARCH%.exe' -OutFile '%INSTALLER%'"
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -UseBasicParsing 'https://www.python.org/ftp/python/%PY_PIN_VER%/python-%PY_PIN_VER%-%ARCH%.exe' -OutFile '%INSTALLER%'"
 )
 
 if not exist "%INSTALLER%" (
