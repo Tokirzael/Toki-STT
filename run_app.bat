@@ -241,7 +241,7 @@ if defined GPU_MAJ if !GPU_MAJ! GEQ 12 set "TORCH_INDEX=cu128"
 echo [INFO] Python 3.!PY_MINOR! -^> PyTorch wheel index: %TORCH_INDEX%
 
 :: Pick pip. Newer pip aborts with WinError 448 when PATH contains an entry on
-:: an untrusted volume (here: cua-driver under AppData). stt_pip.py, copied to
+:: an untrusted volume. stt_pip.py, copied to
 :: %TEMP% by this script at startup (and again here - the deps tail can also be
 :: reached after a .venv rebuild where %TEMP% was cleared), strips those entries
 :: and the temp area for the child process only; plain pip is used if absent.

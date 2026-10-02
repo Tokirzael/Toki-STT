@@ -1,3 +1,10 @@
+# IMPORTANT: pip applies index options to every requirement in this file,
+# regardless of where the option line sits. The PyTorch CUDA index is declared
+# first so a bare `pip install -r requirements.txt` never resolves torch from
+# PyPI (which would silently be the CPU build). run_app.bat still installs
+# torch/torchaudio explicitly from the index matching the GPU.
+--extra-index-url https://download.pytorch.org/whl/cu124
+
 PySide6
 faster-whisper
 # Phonon-2 CPU engine (FermionResearch/Phonon-2): OpenAI-compatible local
@@ -17,8 +24,8 @@ pynput
 openvr>=2.12
 sounddevice
 numpy
-# We will install torch manually in run_app.bat to ensure CUDA version,
-# but listing it here as a fallback or for dependency metadata is fine.
+# torch/torchaudio: the real install is driven by run_app.bat from the CUDA
+# index matching this machine's GPU. Listed here so the dependency is
+# documented for anyone reading the manifest.
 torch
 torchaudio
---extra-index-url https://download.pytorch.org/whl/cu124

@@ -1,6 +1,6 @@
 r"""Probe helper for the Toki-STT launcher (stdlib only).
 
-Shipped next to run_app.bat by the Run_Application_Update branch. Prints
+Shipped next to run_app.bat. Prints
 single-line facts about interpreters / the GPU so run_app.bat can read them
 WITHOUT any nested quoting in batch:
 

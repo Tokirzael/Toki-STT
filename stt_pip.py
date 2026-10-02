@@ -1,10 +1,9 @@
 r"""pip runner for the Toki-STT launcher (stdlib only).
 
-Two faces of one Windows quirk make plain `pip install` fail on this machine:
-when a volume is flagged "untrusted" in MountPointTracker, newer pip aborts any
-install with WinError 448 - triggered by PATH entries on that tree AND by temp
-dirs that land under it (here the whole cua-driver prefix under AppData). Both
-are fixed HERE so no other file changes:
+Two faces of a Windows quirk make plain `pip install` fail on some machines:
+when a volume is flagged "untrusted" in MountPointTracker, newer pip aborts
+any install with WinError 448 - triggered by PATH entries on that tree AND by
+temp dirs that land under it. Both are fixed HERE so no other file changes:
 
 1. The child gets a PATH with exactly the flagged entries removed.
 2. The child gets fresh temp dirs + pip cache under %USERPROFILE%\.stt-tmp,
@@ -13,9 +12,9 @@ are fixed HERE so no other file changes:
 The launcher ALWAYS invokes this as:
     <venv-python> "%TEMP%\stt_pip.py" <pip args...>
 and we spawn our OWN `sys.executable -m pip`, so the venv interpreter runs pip
-no matter what "python" resolves to on PATH (this box has a Python 3.14 that
-must never see these installs). It is a no-op shim where nothing is flagged,
-safe to ship in every copy of the project.
+no matter what "python" resolves to on PATH (some machines carry extra
+interpreters that must never see these installs). It is a no-op shim where
+nothing is flagged, safe to ship in every copy of the project.
 """
 import os
 import subprocess
