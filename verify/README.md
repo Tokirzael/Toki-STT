@@ -6,8 +6,11 @@ audio is recorded. Safe to run at any time.
 
 ## 1. Functional suite (app code)
 
+Run from the Toki-STT folder (the one containing `run_app.bat`), substituting
+its path for `<Toki-STT>`:
+
 ```bat
-cd /d C:\STT
+cd /d <Toki-STT>
 .venv\Scripts\python.exe verify\functional_verify.py
 ```
 
@@ -26,7 +29,7 @@ keyboard hooks) and uses a fake QCloseEvent for the teardown check — everythin
 ## 2. Launcher check (run_app.bat, no app launch)
 
 ```bat
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\STT\verify\nolaunch_verify.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File <Toki-STT>\verify\nolaunch_verify.ps1
 ```
 
 Runs a TEMPORARY copy of run_app.bat with the app-start line swapped for an echo —

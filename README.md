@@ -2,6 +2,24 @@
 
 Desktop/VR speech-to-text utility: hold a PTT key (keyboard or SteamVR controller), speak, release — the utterance is transcribed locally with Whisper and posted to your VRChat chatbox over OSC. No cloud audio, no API keys.
 
+## Getting the Code
+
+Two ways to get it:
+
+**1. Download the zip (easiest).** On the [repository page](https://github.com/Tokirzael/Toki-STT), click the green **Code** button and choose **Download ZIP**. Unzip it anywhere you like (e.g. `D:\Toki-STT` or your Desktop) and double-click `run_app.bat` inside the unzipped folder.
+
+**2. Clone with Git.**
+
+```
+git clone https://github.com/Tokirzael/Toki-STT.git
+cd Toki-STT
+run_app.bat
+```
+
+To update an existing clone later: `git pull` in the folder, then run `run_app.bat` again — the launcher re-checks the environment and only installs what's missing.
+
+Both paths land you in the same place: the folder containing `run_app.bat`. Keep that folder in one spot — your `settings.json` and model cache live next to it, and updates overwrite files in place.
+
 ## Quick Start
 
 ```bat
@@ -57,7 +75,8 @@ run_app.bat                 Self-healing installer + launcher (the only entry po
 stt_probe.py / stt_pip.py   Launcher helpers (interpreter/GPU probes; pip wrapper that
                             works around untrusted-mount PATH issues on this box)
 phonon_check.py             Launcher helper: verifies/prefetches the Phonon-2 model (file token)
-stt_launch_task.{bat,ps1}   Headless relaunch helper
+settings.example.json       Reference of every settings.json key (the app writes
+                            settings.json itself on first run)
 ```
 
 ## Requirements
