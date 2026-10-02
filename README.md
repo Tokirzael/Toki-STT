@@ -1,4 +1,4 @@
-# Toki-STT — Push-To-Talk Whisper Transcription for VRChat
+# Toki-STT — Push-To-Talk Transcription for VRChat
 
 Desktop/VR speech-to-text utility: hold a PTT key (keyboard or SteamVR controller), speak, release — the utterance is transcribed locally with Whisper and posted to your VRChat chatbox over OSC. No cloud audio, no API keys.
 
@@ -39,10 +39,6 @@ Stored in `settings.json` at the project root (created with defaults on first ru
 
 Audio capture runs continuously from app start (the input-level meter needs it) at 16 kHz; your microphone's native channel count is downmixed to mono in the engine, not the OS. Buffered PTT audio is capped at 2 minutes so a stuck key can't grow memory without bound.
 
-## Launching Headless / From Task Scheduler
-
-`stt_launch_task.bat` (→ `stt_launch_task.ps1`) kills any previous instance and starts the app with `pythonw.exe` under a 60-second re-entry lock — for startup tasks or remote restarts. The GUI enforces its own single-instance guard via a temp-dir `QLockFile`, so double-launches from anywhere are safe (the second instance exits cleanly).
-
 ## Logging
 
 Console + rotating file (`debug.log`, 5 × 5 MB) at the project root, full DEBUG detail in the file for post-mortems.
@@ -68,3 +64,23 @@ stt_launch_task.{bat,ps1}   Headless relaunch helper
 
 - Windows with a microphone; NVIDIA GPU optional but strongly recommended
 - SteamVR only needed for VR PTT — the app runs fine without it
+
+## License
+
+Copyright (c) 2026 Toki Ir'zael. Free software, offered as a gift.
+
+You are free to:
+
+- use it, in whole or in part, for any purpose that is not for profit;
+- study, modify, and improve it;
+- share your copies with anyone, free of charge, provided this license
+  travels with the code.
+
+You may not:
+
+- sell it, or bundle it with a paid product or service;
+- use it commercially (in exchange for money or other profit) without
+  the author's express written permission.
+
+Provided "as is", without warranty of any kind; the author is not liable
+for any damages arising from its use.

@@ -14,7 +14,7 @@ copy /y "%~dp0phonon_check.py" "%TEMP%\phonon_check.py" >nul 2>&1
 :: STEP 1 - Pick an interpreter (PYTHON_USED = how to invoke it: a "py -3.NN"
 :: launcher form, bare "python", or a python.exe path). Preference order:
 ::   1. py launcher pinned per-minor: 3.12 first (reference cu124 pairing),
-::      then 3.13 (cu126 - the proven C:\STT install runs here), then
+::      then 3.13 (cu126), then
 ::      3.9 / 3.10 / 3.11
 ::   2. bare "python" on PATH if its minor is supported
 ::   3. standard install dirs, newest name first: %LOCALAPPDATA%\Programs\Python,

@@ -11,9 +11,9 @@ cd /d C:\STT
 .venv\Scripts\python.exe verify\functional_verify.py
 ```
 
-Exit code 0 + final `OVERALL: OK` = healthy. 17 checks covering:
+Exit code 0 + final `OVERALL: OK` = healthy. 20 checks covering:
 
-- imports of every module (PySide6, whisper, faster-whisper, openvr, ...)
+- imports of every module (PySide6, faster-whisper, fermion, openvr, ...)
 - ConfigManager: defaults, persistence round-trip, partial-file merge, corrupt-file recovery
 - STT engine buffer contract (accumulate / dtype-coerce / clear / empty-finalize) on BOTH engines
 - full PTT pipeline on a real model: load from cache → feed 3s of synthetic audio → transcribe → unload
