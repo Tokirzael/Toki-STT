@@ -94,7 +94,7 @@ goto :have_python
 "!PYTHON_USED!" "%~dp0stt_probe.py" > %TEMP%\stt_py_real.txt 2>nul
 set /p _REAL=<%TEMP%\stt_py_real.txt 2>nul
 if defined _REAL set "PYTHON_USED=!_REAL!"
-!PYTHON_USED! --version
+"!PYTHON_USED!" --version
 echo [INFO] Using interpreter: !PYTHON_USED!
 
 :: ===========================================================================
@@ -182,7 +182,7 @@ goto :deps_tail
 
 :create_venv
 echo [INFO] Creating virtual environment with !PYTHON_USED! ...
-!PYTHON_USED! -m venv .venv
+"!PYTHON_USED!" -m venv .venv
 if errorlevel 1 (
     echo [ERROR] Virtual environment creation failed.
     pause
