@@ -36,7 +36,8 @@ goto :have_python
 :install_python
 echo [WARN] No compatible Python (3.9-3.13) detected on this system. Attempting automatic install...
 set "PY_PIN_VER=3.12.7"
-if /i "%PROCESSOR_ARCHITECTURE%"=="ARM64" set "ARCH=arm64" else set "ARCH=amd64"
+set "ARCH=amd64"
+if /i "%PROCESSOR_ARCHITECTURE%"=="ARM64" set "ARCH=arm64"
 echo [INFO] Downloading official Python %PY_PIN_VER% installer (%ARCH%) from python.org...
 set "INSTALLER=%TEMP%\python_installer.exe"
 
