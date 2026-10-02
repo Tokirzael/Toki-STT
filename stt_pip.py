@@ -18,6 +18,7 @@ must never see these installs). It is a no-op shim where nothing is flagged,
 safe to ship in every copy of the project.
 """
 import os
+import subprocess
 import sys
 
 
@@ -58,7 +59,16 @@ def main():
 
     # spawnve (NOT spawnv): the sanitized environment must be passed explicitly.
     # sys.executable == the venv python that ran us - immune to PATH drift.
-    return os.spawnve(os.P_WAIT, sys.executable, [sys.executable, "-m", "pip"] + args, env)
+    #
+    # NOTE: os.spawnve was the original implementation but it is SPACE-HOSTILE:
+    # on Windows it re-parses a space-joined command line and does not quote
+    # the executable, so a venv python at a space-containing path (e.g.
+    # "...\Toki-STT-main (2)\.venv\Scripts\python.exe") is mangled into
+    # "C:\\...\\pf: can't open file 'C:\\...\\sim\\python.exe'". subprocess.call
+    # builds the command line correctly (list2cmdline quotes each arg) and
+    # still passes the sanitized env explicitly. Proven end-to-end on a
+    # space-path python.
+    return subprocess.call([sys.executable, "-m", "pip"] + args, env=env)
 
 
 if __name__ == "__main__":
